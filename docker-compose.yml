@@ -1,0 +1,100 @@
+name: qpic
+
+x-service-env: &service-env
+  EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
+  EUREKA_INSTANCE_PREFERIPADDRESS: "true"
+  JWT_SECRET: ${txwbw3VPvJmCip+9aEfBNu1aCXRPu72XC++C2sVc8Ww=}
+  INTERNAL_SECRET: ${this-is-the-internal-secret-i-guess}
+  SPRING_DATASOURCE_USERNAME: postgres
+  SPRING_DATASOURCE_PASSWORD: postgres
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - miniodata:/data
+    ports:
+      - "9000:9000" # S3 API  (phones upload/download here via presigned URLs)
+      - "9001:9001" # console
+
+  discovery-server:
+    build: { context: ., args: { MODULE: discovery-server } }
+    ports:
+      - "8761:8761"
+
+  api-gateway:
+    build: { context: ., args: { MODULE: api-gateway } }
+    environment: *service-env
+    depends_on: [discovery-server]
+    ports:
+      - "8080:8080"
+    restart: on-failure
+
+  auth-service:
+    build: { context: ., args: { MODULE: auth-service } }
+    environment:
+      <<: *service-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/auth_db
+    depends_on:
+      postgres: { condition: service_healthy }
+      discovery-server: { condition: service_started }
+    restart: on-failure
+
+  media-service:
+    build: { context: ., args: { MODULE: media-service } }
+    environment:
+      <<: *service-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/media_db
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-http://10.35.170.242}
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio: { condition: service_started }
+      discovery-server: { condition: service_started }
+    restart: on-failure
+
+  album-service:
+    build: { context: ., args: { MODULE: album-service } }
+    environment:
+      <<: *service-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/album_db
+    depends_on:
+      postgres: { condition: service_healthy }
+      discovery-server: { condition: service_started }
+    restart: on-failure
+
+  share-service:
+    build: { context: ., args: { MODULE: share-service } }
+    environment:
+      <<: *service-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/share_db
+      SHARE_BASE_URL: ${SHARE_BASE_URL:-https://qpic.example.com}
+      SHARE_DEEP_LINK_PREFIX: ${SHARE_DEEP_LINK_PREFIX:-qpic://s/}
+    depends_on:
+      postgres: { condition: service_healthy }
+      discovery-server: { condition: service_started }
+    restart: on-failure
+
+volumes:
+  pgdata:
+  miniodata:
