@@ -4,12 +4,12 @@ FROM maven:3.9-eclipse-temurin-21 AS build
 ARG MODULE
 WORKDIR /src
 COPY . .
-RUN mvn -q -B -pl media-service -am -DskipTests 
-RUN mvn -q -B -pl auth-service -am -DskipTests 
-RUN mvn -q -B -pl album-service -am -DskipTests 
-RUN mvn -q -B -pl api-gateway -am -DskipTests 
-RUN mvn -q -B -pl share-service -am -DskipTests 
-RUN mvn -q -B -pl discovery-server -am -DskipTests 
+RUN mvn -q -B -pl clean package media-service -am -DskipTests 
+RUN mvn -q -B -pl clean package auth-service -am -DskipTests 
+RUN mvn -q -B -pl clean package album-service -am -DskipTests 
+RUN mvn -q -B -pl clean package api-gateway -am -DskipTests 
+RUN mvn -q -B -pl clean package share-service -am -DskipTests 
+RUN mvn -q -B -pl clean package discovery-server -am -DskipTests 
 
 FROM eclipse-temurin:21-jre
 ARG MODULE
