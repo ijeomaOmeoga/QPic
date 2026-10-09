@@ -1,0 +1,64 @@
+
+This file is the Spring Boot configuration for the album service. It tells the app how to start, how to connect to the database, how to register itself in the system, and what internal secrets it should use.
+
+### 1) Server settings
+- `server.port: 8083`
+  - Runs this service on port 8083 instead of the default Spring Boot port 8080.
+
+### 2) Application identity
+- `spring.application.name: album-service`
+  - Gives the service a name so other services and the discovery server can find it by name.
+
+### 3) Database connection
+- `spring.datasource.*`
+  - `url: jdbc:postgresql://localhost:5432/album_db`
+  - `username: postgres`
+  - `password: postgres`
+  - These are the credentials and JDBC URL for connecting to PostgreSQL.
+
+### 4) JPA / ORM
+- `spring.jpa`
+  - `open-in-view: false`
+    - Disables the default Open Session in View behavior, which helps avoid lazy-loading issues and improves performance.
+  - `hibernate.ddl-auto: validate`
+    - Tells Hibernate not to create or alter tables automatically; it only validates the schema against the entity mappings.
+  - `properties.hibernate.default_batch_fetch_size: 50`
+    - Improves batch loading for associated records and reduces database round trips.
+
+### 5) Flyway
+- `spring.flyway.enabled: true`
+  - Runs database migration scripts automatically on startup, so the schema stays in sync with the app.
+
+### 6) OpenFeign HTTP client
+- `spring.cloud.openfeign.client.config.default`
+  - `connect-timeout: 3000`
+  - `read-timeout: 10000`
+  - These set the default timeout values for outgoing HTTP requests made through Feign clients.
+
+### 7) Eureka service discovery
+- `eureka.client.service-url.defaultZone: http://localhost:8761/eureka`
+  - This is the address of the Eureka server, where services register themselves.
+- `eureka.instance.prefer-ip-address: true`
+  - Registers the service using its IP address instead of hostname, which is useful in Docker/local dev setups.
+
+### 8) Actuator / health endpoints
+- `management.endpoints.web.exposure.include: health,info`
+  - Exposes only health and info endpoints so you can check service status without exposing everything.
+
+### 9) App-specific secret
+- `app.internal.secret: ${INTERNAL_SECRET:change-me-internal-secret}`
+  - This is a custom config value used for internal service-to-service auth.
+  - `${INTERNAL_SECRET:...}` means:
+    - use the environment variable `INTERNAL_SECRET` if present
+    - otherwise fall back to `change-me-internal-secret`
+
+---
+
+In short, this file configures:
+- where the service runs
+- how it connects to the database
+- how it registers with the system
+- how it talks to other services
+- what security secrets it uses
+
+If you want, I can also explain how this file fits together with the rest of the backend services in the project.

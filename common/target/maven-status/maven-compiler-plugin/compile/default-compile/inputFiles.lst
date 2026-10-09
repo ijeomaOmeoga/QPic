@@ -1,0 +1,17 @@
+C:\Users\LF\Documents\QPIC2\qpic\qpic-backend\common\src\main\java\com\qrshare\common\client\AlbumClient.java
+C:\Users\LF\Documents\QPIC2\qpic\qpic-backend\common\src\main\java\com\qrshare\common\client\MediaClient.java
+C:\Users\LF\Documents\QPIC2\qpic\qpic-backend\common\src\main\java\com\qrshare\common\config\CommonAutoConfiguration.java
+C:\Users\LF\Documents\QPIC2\qpic\qpic-backend\common\src\main\java\com\qrshare\common\dto\AlbumView.java
+C:\Users\LF\Documents\QPIC2\qpic\qpic-backend\common\src\main\java\com\qrshare\common\dto\MediaGroupView.java
+C:\Users\LF\Documents\QPIC2\qpic\qpic-backend\common\src\main\java\com\qrshare\common\dto\MediaItemView.java
+C:\Users\LF\Documents\QPIC2\qpic\qpic-backend\common\src\main\java\com\qrshare\common\dto\MediaKind.java
+C:\Users\LF\Documents\QPIC2\qpic\qpic-backend\common\src\main\java\com\qrshare\common\dto\MediaView.java
+C:\Users\LF\Documents\QPIC2\qpic\qpic-backend\common\src\main\java\com\qrshare\common\dto\OwnerResponse.java
+C:\Users\LF\Documents\QPIC2\qpic\qpic-backend\common\src\main\java\com\qrshare\common\dto\OwnershipCheck.java
+C:\Users\LF\Documents\QPIC2\qpic\qpic-backend\common\src\main\java\com\qrshare\common\dto\PageResponse.java
+C:\Users\LF\Documents\QPIC2\qpic\qpic-backend\common\src\main\java\com\qrshare\common\error\ApiError.java
+C:\Users\LF\Documents\QPIC2\qpic\qpic-backend\common\src\main\java\com\qrshare\common\error\ApiException.java
+C:\Users\LF\Documents\QPIC2\qpic\qpic-backend\common\src\main\java\com\qrshare\common\error\GlobalExceptionHandler.java
+C:\Users\LF\Documents\QPIC2\qpic\qpic-backend\common\src\main\java\com\qrshare\common\web\CurrentUser.java
+C:\Users\LF\Documents\QPIC2\qpic\qpic-backend\common\src\main\java\com\qrshare\common\web\CurrentUserResolver.java
+C:\Users\LF\Documents\QPIC2\qpic\qpic-backend\common\src\main\java\com\qrshare\common\web\InternalApiFilter.java

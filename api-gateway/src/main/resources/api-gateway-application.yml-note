@@ -1,0 +1,81 @@
+
+This file configures the API gateway, which is the front door for the backend. It receives requests from the app, forwards them to the right microservice, handles CORS, and validates JWTs.
+
+### 1) Server port
+- `server.port: 8082`
+  - The gateway runs on port 8082.
+  - Frontend/mobile clients talk to this port instead of calling each backend service directly.
+
+### 2) Service name
+- `spring.application.name: api-gateway`
+  - Identifies this service in the Spring/Eureka system.
+
+### 3) Spring Cloud Gateway
+This is the main routing section.
+
+#### HTTP client
+- `spring.cloud.gateway.httpclient.connect-timeout: 5000`
+  - If connecting to another service takes longer than 5 seconds, the request fails.
+- `spring.cloud.gateway.httpclient.response-timeout: 600s`
+  - Large upload requests can take longer, so the gateway waits up to 10 minutes for a response.
+
+#### CORS
+- `globalcors`
+  - Allows cross-origin requests from the frontend/mobile app.
+  - `allowedOriginPatterns: "*"` means any origin is allowed.
+  - `allowedMethods: "*"` and `allowedHeaders: "*"` allow all standard HTTP methods/headers.
+  - `maxAge: 3600` tells browsers to cache the CORS preflight result for 1 hour.
+
+#### Routes
+These map incoming URLs to internal services:
+
+- `auth-service`
+  - `Path=/api/auth/**`
+  - Any request like `/api/auth/login` gets routed to the auth service.
+
+- `media-service`
+  - `Path=/api/media/**`
+  - Requests for media upload/download go to the media service.
+
+- `album-service`
+  - `Path=/api/albums/**`
+  - Album-related requests go to the album service.
+
+- `share-service`
+  - `Path=/api/shares/**,/api/public/shares/**`
+  - Share functionality is split between private and public share APIs.
+
+So the gateway acts like a central router:
+- app calls `/api/media/...`
+- gateway finds the matching route
+- forwards it to `lb://media-service`
+
+`lb://` means “load-balanced service discovery” through Eureka.
+
+### 4) Eureka registration
+- `eureka.client.service-url.defaultZone: http://localhost:8761/eureka`
+  - Tells the gateway where the Eureka server is.
+- `eureka.instance.prefer-ip-address: true`
+  - Registers using IP rather than hostname.
+
+### 5) Actuator
+- `management.endpoints.web.exposure.include: health,info`
+  - Exposes health and info endpoints to monitor the service.
+
+### 6) JWT secret
+- `app.jwt.secret: ${JWT_SECRET:...}`
+  - Stores the key used to validate JSON Web Tokens.
+  - If `JWT_SECRET` is set in the environment, it uses that.
+  - Otherwise it falls back to the default value shown.
+
+---
+
+## In plain English
+
+This file makes the gateway:
+- the single entry point for the app
+- the place that routes requests to the correct backend service
+- the place that allows browser/mobile apps to call it safely
+- the place that handles service discovery and JWT validation
+
+If you want, I can also explain how the app’s URLs are expected to look in the frontend and which routes correspond to which backend endpoints.
