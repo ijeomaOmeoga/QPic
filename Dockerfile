@@ -10,6 +10,7 @@ RUN mvn -q -B -pl album-service -am -DskipTests
 RUN mvn -q -B -pl api-gateway -am -DskipTests 
 RUN mvn -q -B -pl share-service -am -DskipTests 
 RUN mvn -q -B -pl discovery-server -am -DskipTests 
+
 FROM eclipse-temurin:21-jre
 ARG MODULE
 WORKDIR /app
