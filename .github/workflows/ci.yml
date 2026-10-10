@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/SchemaStore/schemastore/master/src/schemas/json/github-workflow.json
+name: qpic-ci
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  build-and-test:
+    # ... existing build-and-test job ...
+
+  docker-build:
+    # ... existing docker-build job (for validation only) ...
+
+  validate-k8s:
+    # ... existing validate-k8s job (skip if using Render) ...
+
+  deploy-to-render:
+    name: Deploy to Render (optional)
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: build-and-test
+    
+    steps:
+      - name: Trigger Render deployment
+        run: |
+          curl -X POST "https://api.render.com/deploy/srv-${{ secrets.RENDER_SERVICE_ID }}?key=${{ secrets.RENDER_API_KEY }}"
