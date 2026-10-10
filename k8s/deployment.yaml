@@ -1,0 +1,822 @@
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: qpic
+  labels:
+    app: qpic
+
+---
+# ConfigMap for common environment variables
+# Non-sensitive configuration shared across services
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: qpic-common-config
+  namespace: qpic
+data:
+  EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://discovery-server:8761/eureka"
+  EUREKA_INSTANCE_PREFERIPADDRESS: "true"
+  SPRING_DATASOURCE_USERNAME: postgres
+  MINIO_ENDPOINT: "http://minio:9000"
+  SHARE_BASE_URL: "https://qpic.example.com"
+  SHARE_DEEP_LINK_PREFIX: "qpic://s/"
+
+---
+# Secret for sensitive data (JWT, database passwords, MinIO credentials)
+# TODO: Replace placeholder values in your CI/CD pipeline or use external secret management (HashiCorp Vault, AWS Secrets Manager, etc.)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: qpic-secrets
+  namespace: qpic
+type: Opaque
+stringData:
+  # JWT_SECRET: Replace with a secure random value (e.g., from: openssl rand -base64 32)
+  JWT_SECRET: "PLACEHOLDER_JWT_SECRET_REPLACE_IN_PIPELINE"
+  # INTERNAL_SECRET: Used for inter-service communication
+  INTERNAL_SECRET: "PLACEHOLDER_INTERNAL_SECRET_REPLACE_IN_PIPELINE"
+  # Database credentials
+  SPRING_DATASOURCE_PASSWORD: "PLACEHOLDER_DB_PASSWORD_REPLACE_IN_PIPELINE"
+  # MinIO credentials (S3-compatible object storage)
+  MINIO_ROOT_USER: "PLACEHOLDER_MINIO_USER_REPLACE_IN_PIPELINE"
+  MINIO_ROOT_PASSWORD: "PLACEHOLDER_MINIO_PASSWORD_REPLACE_IN_PIPELINE"
+
+---
+# Service Account for QPic pods (for RBAC)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: qpic
+  namespace: qpic
+
+---
+# Role for QPic pods (minimal permissions)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: qpic
+  namespace: qpic
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+
+---
+# RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: qpic
+  namespace: qpic
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: qpic
+subjects:
+  - kind: ServiceAccount
+    name: qpic
+    namespace: qpic
+
+---
+# Discovery Server (Eureka)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: discovery-server
+  namespace: qpic
+  labels:
+    app: discovery-server
+    version: v1
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: discovery-server
+  template:
+    metadata:
+      labels:
+        app: discovery-server
+        version: v1
+    spec:
+      serviceAccountName: qpic
+      containers:
+        - name: discovery-server
+          # PLACEHOLDER: Replace with your container registry and image tag
+          # Example: ghcr.io/ijeomaOmeoga/qpic/discovery-server:main
+          image: PLACEHOLDER_REGISTRY/PLACEHOLDER_IMAGE:discovery-server-main
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8761
+              protocol: TCP
+          env:
+            - name: JAVA_OPTS
+              value: "-XX:MaxRAMPercentage=75 -Dspring.profiles.active=k8s"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8761
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8761
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: discovery-server
+  namespace: qpic
+  labels:
+    app: discovery-server
+spec:
+  type: ClusterIP
+  selector:
+    app: discovery-server
+  ports:
+    - name: http
+      port: 8761
+      targetPort: 8761
+      protocol: TCP
+
+---
+# API Gateway
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: qpic
+  labels:
+    app: api-gateway
+    version: v1
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+        version: v1
+    spec:
+      serviceAccountName: qpic
+      containers:
+        - name: api-gateway
+          image: PLACEHOLDER_REGISTRY/PLACEHOLDER_IMAGE:api-gateway-main
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              valueFrom:
+                configMapKeyRef:
+                  name: qpic-common-config
+                  key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+            - name: EUREKA_INSTANCE_PREFERIPADDRESS
+              valueFrom:
+                configMapKeyRef:
+                  name: qpic-common-config
+                  key: EUREKA_INSTANCE_PREFERIPADDRESS
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: qpic-secrets
+                  key: JWT_SECRET
+            - name: INTERNAL_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: qpic-secrets
+                  key: INTERNAL_SECRET
+            - name: JAVA_OPTS
+              value: "-XX:MaxRAMPercentage=75 -Dspring.profiles.active=k8s"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              cpu: 1000m
+              memory: 1.5Gi
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: qpic
+  labels:
+    app: api-gateway
+spec:
+  type: LoadBalancer
+  selector:
+    app: api-gateway
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+
+---
+# Auth Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: qpic
+  labels:
+    app: auth-service
+    version: v1
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+        version: v1
+    spec:
+      serviceAccountName: qpic
+      containers:
+        - name: auth-service
+          image: PLACEHOLDER_REGISTRY/PLACEHOLDER_IMAGE:auth-service-main
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              valueFrom:
+                configMapKeyRef:
+                  name: qpic-common-config
+                  key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+            - name: EUREKA_INSTANCE_PREFERIPADDRESS
+              valueFrom:
+                configMapKeyRef:
+                  name: qpic-common-config
+                  key: EUREKA_INSTANCE_PREFERIPADDRESS
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgres:5432/auth_db"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: qpic-common-config
+                  key: SPRING_DATASOURCE_USERNAME
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: qpic-secrets
+                  key: SPRING_DATASOURCE_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: qpic-secrets
+                  key: JWT_SECRET
+            - name: INTERNAL_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: qpic-secrets
+                  key: INTERNAL_SECRET
+            - name: JAVA_OPTS
+              value: "-XX:MaxRAMPercentage=75 -Dspring.profiles.active=k8s"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              cpu: 1000m
+              memory: 1.5Gi
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: qpic
+  labels:
+    app: auth-service
+spec:
+  type: ClusterIP
+  selector:
+    app: auth-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+
+---
+# Media Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: media-service
+  namespace: qpic
+  labels:
+    app: media-service
+    version: v1
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: media-service
+  template:
+    metadata:
+      labels:
+        app: media-service
+        version: v1
+    spec:
+      serviceAccountName: qpic
+      containers:
+        - name: media-service
+          image: PLACEHOLDER_REGISTRY/PLACEHOLDER_IMAGE:media-service-main
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              valueFrom:
+                configMapKeyRef:
+                  name: qpic-common-config
+                  key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+            - name: EUREKA_INSTANCE_PREFERIPADDRESS
+              valueFrom:
+                configMapKeyRef:
+                  name: qpic-common-config
+                  key: EUREKA_INSTANCE_PREFERIPADDRESS
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgres:5432/media_db"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: qpic-common-config
+                  key: SPRING_DATASOURCE_USERNAME
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: qpic-secrets
+                  key: SPRING_DATASOURCE_PASSWORD
+            - name: MINIO_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: qpic-common-config
+                  key: MINIO_ENDPOINT
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: qpic-secrets
+                  key: MINIO_ROOT_USER
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: qpic-secrets
+                  key: MINIO_ROOT_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: qpic-secrets
+                  key: JWT_SECRET
+            - name: INTERNAL_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: qpic-secrets
+                  key: INTERNAL_SECRET
+            - name: JAVA_OPTS
+              value: "-XX:MaxRAMPercentage=75 -Dspring.profiles.active=k8s"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              cpu: 1000m
+              memory: 1.5Gi
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: media-service
+  namespace: qpic
+  labels:
+    app: media-service
+spec:
+  type: ClusterIP
+  selector:
+    app: media-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+
+---
+# Album Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: album-service
+  namespace: qpic
+  labels:
+    app: album-service
+    version: v1
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: album-service
+  template:
+    metadata:
+      labels:
+        app: album-service
+        version: v1
+    spec:
+      serviceAccountName: qpic
+      containers:
+        - name: album-service
+          image: PLACEHOLDER_REGISTRY/PLACEHOLDER_IMAGE:album-service-main
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              valueFrom:
+                configMapKeyRef:
+                  name: qpic-common-config
+                  key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+            - name: EUREKA_INSTANCE_PREFERIPADDRESS
+              valueFrom:
+                configMapKeyRef:
+                  name: qpic-common-config
+                  key: EUREKA_INSTANCE_PREFERIPADDRESS
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgres:5432/album_db"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: qpic-common-config
+                  key: SPRING_DATASOURCE_USERNAME
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: qpic-secrets
+                  key: SPRING_DATASOURCE_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: qpic-secrets
+                  key: JWT_SECRET
+            - name: INTERNAL_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: qpic-secrets
+                  key: INTERNAL_SECRET
+            - name: JAVA_OPTS
+              value: "-XX:MaxRAMPercentage=75 -Dspring.profiles.active=k8s"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              cpu: 1000m
+              memory: 1.5Gi
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: album-service
+  namespace: qpic
+  labels:
+    app: album-service
+spec:
+  type: ClusterIP
+  selector:
+    app: album-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+
+---
+# Share Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: share-service
+  namespace: qpic
+  labels:
+    app: share-service
+    version: v1
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: share-service
+  template:
+    metadata:
+      labels:
+        app: share-service
+        version: v1
+    spec:
+      serviceAccountName: qpic
+      containers:
+        - name: share-service
+          image: PLACEHOLDER_REGISTRY/PLACEHOLDER_IMAGE:share-service-main
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              valueFrom:
+                configMapKeyRef:
+                  name: qpic-common-config
+                  key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+            - name: EUREKA_INSTANCE_PREFERIPADDRESS
+              valueFrom:
+                configMapKeyRef:
+                  name: qpic-common-config
+                  key: EUREKA_INSTANCE_PREFERIPADDRESS
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgres:5432/share_db"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: qpic-common-config
+                  key: SPRING_DATASOURCE_USERNAME
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: qpic-secrets
+                  key: SPRING_DATASOURCE_PASSWORD
+            - name: SHARE_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: qpic-common-config
+                  key: SHARE_BASE_URL
+            - name: SHARE_DEEP_LINK_PREFIX
+              valueFrom:
+                configMapKeyRef:
+                  name: qpic-common-config
+                  key: SHARE_DEEP_LINK_PREFIX
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: qpic-secrets
+                  key: JWT_SECRET
+            - name: INTERNAL_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: qpic-secrets
+                  key: INTERNAL_SECRET
+            - name: JAVA_OPTS
+              value: "-XX:MaxRAMPercentage=75 -Dspring.profiles.active=k8s"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              cpu: 1000m
+              memory: 1.5Gi
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: share-service
+  namespace: qpic
+  labels:
+    app: share-service
+spec:
+  type: ClusterIP
+  selector:
+    app: share-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
