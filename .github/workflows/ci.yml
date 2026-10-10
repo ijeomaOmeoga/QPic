@@ -9,21 +9,49 @@ on:
 
 jobs:
   build-and-test:
-    # ... existing build-and-test job ...
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Run Maven tests
+        run: mvn -B clean test
 
   docker-build:
-    # ... existing docker-build job (for validation only) ...
+    needs: build-and-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t qpic:${{ github.sha }} .
 
   validate-k8s:
-    # ... existing validate-k8s job (skip if using Render) ...
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kubernetes validation is not required for Render deploys
+        run: echo "Skipping Kubernetes validation because deployment is handled by Render."
 
   deploy-to-render:
-    name: Deploy to Render (optional)
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    name: Deploy to Render
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && secrets.RENDER_SERVICE_ID != '' && secrets.RENDER_API_KEY != ''
     needs: build-and-test
-    
+    runs-on: ubuntu-latest
+
     steps:
       - name: Trigger Render deployment
+        env:
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
-          curl -X POST "https://api.render.com/deploy/srv-${{ secrets.RENDER_SERVICE_ID }}?key=${{ secrets.RENDER_API_KEY }}"
+          curl -X POST "https://api.render.com/deploy/srv-${RENDER_SERVICE_ID}?key=${RENDER_API_KEY}"
