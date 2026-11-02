@@ -10,7 +10,11 @@ import {
 	View,
 } from 'react-native';
 
-export default function LoginScreen() {
+type LoginScreenProps = {
+	onSubmit?: () => void;
+};
+
+export default function LoginScreen({ onSubmit }: LoginScreenProps) {
 	const [username, setUsername] = useState('');
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
@@ -25,6 +29,7 @@ export default function LoginScreen() {
 
 		setError('');
 		setSubmittedUsername(username.trim());
+		onSubmit?.();
 	}
 
 	return (

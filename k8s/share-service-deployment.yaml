@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+	name: share-service
+	labels:
+		app: share-service
+spec:
+	replicas: 1
+	selector:
+		matchLabels:
+			app: share-service
+	template:
+		metadata:
+			labels:
+				app: share-service
+		spec:
+			containers:
+				- name: share-service
+					image: share-service:latest
+					imagePullPolicy: IfNotPresent
+					ports:
+						- name: http
+							containerPort: 8086
+							protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+	name: share-service
+	labels:
+		app: share-service
+spec:
+	type: ClusterIP
+	selector:
+		app: share-service
+	ports:
+		- name: http
+			port: 80
+			targetPort: http
+			protocol: TCP
