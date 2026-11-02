@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+	name: media-share
+	labels:
+		app: media-share
+spec:
+	replicas: 1
+	selector:
+		matchLabels:
+			app: media-share
+	template:
+		metadata:
+			labels:
+				app: media-share
+		spec:
+			containers:
+				- name: media-share
+					image: media-share:latest
+					imagePullPolicy: IfNotPresent
+					ports:
+						- name: http
+							containerPort: 8080
+							protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+	name: media-share
+	labels:
+		app: media-share
+spec:
+	type: ClusterIP
+	selector:
+		app: media-share
+	ports:
+		- name: http
+			port: 80
+			targetPort: http
+			protocol: TCP
