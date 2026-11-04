@@ -49,4 +49,4 @@ management:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:txwbw3VPvJmCip+9aEfBNu1aCXRPu72XC++C2sVc8Ww=}
+    secret: ${JWT_SECRET:?Set JWT_SECRET in .env}

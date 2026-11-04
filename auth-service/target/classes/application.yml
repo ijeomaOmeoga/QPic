@@ -30,8 +30,8 @@ management:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:change-me-change-me-change-me-change-me-1234}
+    secret: ${JWT_SECRET:?Set JWT_SECRET in .env}
     access-ttl-minutes: 60
     refresh-ttl-days: 30
   internal:
-    secret: ${INTERNAL_SECRET:change-me-internal-secret}
+    secret: ${INTERNAL_SECRET:?Set INTERNAL_SECRET in .env}
