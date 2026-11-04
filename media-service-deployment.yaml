@@ -1,40 +1,40 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-	name: media-service
-	labels:
-		app: media-service
+  name: media-service
+  labels:
+    app: media-service
 spec:
-	replicas: 1
-	selector:
-		matchLabels:
-			app: media-service
-	template:
-		metadata:
-			labels:
-				app: media-service
-		spec:
-			containers:
-				- name: media-service
-					image: media-service:latest
-					imagePullPolicy: IfNotPresent
-					ports:
-						- name: http
-							containerPort: 8085
-							protocol: TCP
+  replicas: 1
+  selector:
+    matchLabels:
+      app: media-service
+  template:
+    metadata:
+      labels:
+        app: media-service
+    spec:
+      containers:
+        - name: media-service
+          image: media-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8085
+              protocol: TCP
 ---
 apiVersion: v1
 kind: Service
 metadata:
-	name: media-service
-	labels:
-		app: media-service
+  name: media-service
+  labels:
+    app: media-service
 spec:
-	type: ClusterIP
-	selector:
-		app: media-service
-	ports:
-		- name: http
-			port: 80
-			targetPort: http
-			protocol: TCP
+  type: ClusterIP
+  selector:
+    app: media-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP

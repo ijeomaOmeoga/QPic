@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: album-service
+  labels:
+    app: album-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: album-service
+  template:
+    metadata:
+      labels:
+        app: album-service
+    spec:
+      containers:
+        - name: album-service
+          image: album-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8083
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: album-service
+  labels:
+    app: album-service
+spec:
+  type: ClusterIP
+  selector:
+    app: album-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
